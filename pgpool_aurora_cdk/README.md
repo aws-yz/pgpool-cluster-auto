@@ -1,11 +1,6 @@
-# Pgpool-II Aurora PostgreSQL Architecture
+# Pgpool-II Aurora PostgreSQL CDK部署指南
 
-这个项目使用AWS CDK实现了一个高可用的Pgpool-II与Aurora PostgreSQL架构。该架构包括：
-
-- Aurora PostgreSQL集群（1个写入节点，可配置数量的读取节点）
-- 使用预先创建的AMI部署Pgpool-II的Auto Scaling Group
-- 网络负载均衡器(NLB)，通过pgdoctor(8071端口)检查pgpool健康状态
-- 适当的安全组配置和IAM角色
+本文档提供了使用AWS CDK部署Pgpool-II与Aurora PostgreSQL高可用架构的详细步骤。这是项目的CDK部署部分，关于整体项目架构和AMI创建，请参考[根目录README](../README.md)。
 
 ## 架构概述
 
@@ -138,3 +133,194 @@ cdk deploy -c ami_id=ami-xxxxxxxxxx [其他参数]
 ```bash
 aws cloudformation describe-stacks --stack-name PgpoolAuroraStack --query "Stacks[0].Outputs"
 ```
+
+## 部署后验证
+
+部署完成后，您可以通过以下方式验证架构：
+
+1. **连接到NLB端点**：
+   ```bash
+   psql -h <NLB_ENDPOINT> -p 5432 -U pdadmin -d postgres
+   ```
+   NLB端点可以从CloudFormation输出中获取。
+
+2. **验证连接池和负载均衡功能**：
+   在psql中执行以下查询，验证连接是否正常：
+   ```sql
+   SELECT current_database(), current_user;
+   ```
+
+3. **验证读写分离**：
+   执行以下查询，观察是否在不同的节点上执行：
+   ```sql
+   -- 写入查询会路由到主节点
+   CREATE TABLE test_table (id serial, name text);
+   INSERT INTO test_table (name) VALUES ('test');
+   
+   -- 读取查询可能会路由到读取节点
+   SELECT * FROM test_table;
+   ```
+
+4. **验证Auto Scaling**：
+   可以通过AWS控制台监控Auto Scaling Group的状态，或者通过以下命令：
+   ```bash
+   aws autoscaling describe-auto-scaling-groups --auto-scaling-group-name <ASG_NAME>
+   ```
+
+5. **验证健康检查**：
+   可以通过以下命令检查NLB目标组的健康状态：
+   ```bash
+   aws elbv2 describe-target-health --target-group-arn <TARGET_GROUP_ARN>
+   ```
+
+## 最佳实践
+
+### 高可用性
+
+1. **多可用区部署**：
+   - 确保Pgpool-II实例部署在至少两个可用区
+   - Aurora集群应跨多个可用区部署
+   - 设置Auto Scaling Group的最小容量为2，确保始终有多个Pgpool实例运行
+
+2. **故障转移配置**：
+   - 配置适当的健康检查参数，确保快速检测故障
+   - 设置合理的冷却时间，避免频繁的扩展和收缩
+
+### 安全性
+
+1. **数据加密**：
+   - 使用密钥管理服务(KMS)加密Aurora数据
+   - 启用传输中加密(SSL/TLS)
+
+2. **访问控制**：
+   - 实现精细的安全组规则，限制最小必要的访问
+   - 使用Secrets Manager存储和轮换数据库凭证
+   - 定期轮换数据库凭证，建议设置自动轮换
+
+3. **网络隔离**：
+   - 将Pgpool-II实例部署在私有子网中
+   - 将Aurora集群部署在隔离子网中
+   - 只允许必要的网络流量
+
+4. **审计和日志**：
+   - 启用Aurora审计日志
+   - 配置CloudTrail跟踪API调用
+   - 启用VPC流日志监控网络流量
+
+### 监控
+
+1. **CloudWatch告警**：
+   - 设置CPU、内存和连接数的告警
+   - 监控Aurora的复制延迟
+   - 配置磁盘空间使用率告警
+
+2. **通知机制**：
+   - 配置SNS通知接收关键告警
+   - 设置自动扩展事件通知
+
+3. **仪表板**：
+   - 创建综合性CloudWatch仪表板监控整个架构
+   - 包括Pgpool实例、NLB和Aurora集群的关键指标
+
+### 备份和恢复
+
+1. **自动备份**：
+   - 配置Aurora自动备份策略，默认保留期为7天
+   - 考虑创建手动快照用于长期保留
+
+2. **灾难恢复**：
+   - 考虑使用跨区域备份
+   - 定期测试恢复过程
+
+3. **时间点恢复**：
+   - 启用Aurora的时间点恢复功能
+   - 记录关键变更的时间点，便于恢复
+
+## 故障排除
+
+### 连接问题
+
+1. **无法连接到NLB端点**：
+   - 检查安全组规则是否允许从您的IP地址到NLB的流量
+   - 验证NLB健康检查配置是否正确
+   - 检查目标组中是否有健康的目标
+
+   ```bash
+   # 检查目标组健康状态
+   aws elbv2 describe-target-health --target-group-arn <TARGET_GROUP_ARN>
+   
+   # 检查Pgpool实例的状态
+   aws ec2 describe-instance-status --instance-ids <INSTANCE_ID>
+   ```
+
+2. **Pgpool服务未运行**：
+   - 连接到EC2实例并检查服务状态
+   
+   ```bash
+   # 使用SSM连接到实例
+   aws ssm start-session --target <INSTANCE_ID>
+   
+   # 检查服务状态
+   sudo systemctl status pgpool
+   sudo systemctl status pgdoctor
+   
+   # 检查日志
+   sudo journalctl -u pgpool
+   sudo journalctl -u pgdoctor
+   ```
+
+3. **数据库连接失败**：
+   - 验证Secrets Manager中的凭证是否正确
+   - 检查Aurora集群状态
+   
+   ```bash
+   # 检查Aurora集群状态
+   aws rds describe-db-clusters --db-cluster-identifier <CLUSTER_ID>
+   
+   # 获取数据库凭证
+   aws secretsmanager get-secret-value --secret-id <SECRET_ARN> --query SecretString --output text
+   ```
+
+### 扩展问题
+
+1. **Auto Scaling Group未正确扩展**：
+   - 检查Auto Scaling Group配置
+   - 查看CloudWatch指标和告警
+   
+   ```bash
+   # 检查Auto Scaling Group配置
+   aws autoscaling describe-auto-scaling-groups --auto-scaling-group-name <ASG_NAME>
+   
+   # 检查扩展策略
+   aws autoscaling describe-policies --auto-scaling-group-name <ASG_NAME>
+   ```
+
+2. **启动模板问题**：
+   - 检查启动模板配置
+   - 验证AMI是否可用
+   
+   ```bash
+   # 检查启动模板
+   aws ec2 describe-launch-templates --launch-template-ids <TEMPLATE_ID>
+   
+   # 验证AMI状态
+   aws ec2 describe-images --image-ids <AMI_ID>
+   ```
+
+### 更新和修改
+
+1. **更新堆栈**：
+   要更新已部署的堆栈，使用相同的`cdk deploy`命令，但更改参数值：
+   
+   ```bash
+   cdk deploy -c ami_id=<NEW_AMI_ID> -c desired_capacity=4
+   ```
+
+2. **删除堆栈**：
+   要删除所有资源，运行：
+   
+   ```bash
+   cdk destroy
+   ```
+   
+   注意：删除堆栈会删除所有相关资源，包括数据库。默认情况下，Aurora集群会创建最终快照。
