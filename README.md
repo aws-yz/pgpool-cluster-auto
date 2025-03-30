@@ -2,6 +2,27 @@
 
 这个项目实现了一个高可用的Pgpool-II与Aurora PostgreSQL架构，使用AWS CDK进行基础设施即代码部署。
 
+## 获取项目代码
+
+您可以通过以下方式获取项目代码：
+
+### 使用Git克隆
+
+```bash
+git clone https://github.com/yourusername/pgpool-cluster-auto.git
+cd pgpool-cluster-auto
+```
+
+### 直接下载
+
+1. 访问项目GitHub页面: https://github.com/yourusername/pgpool-cluster-auto
+2. 点击"Code"按钮，然后选择"Download ZIP"
+3. 解压下载的ZIP文件
+4. 进入解压后的目录
+   ```bash
+   cd pgpool-cluster-auto-main
+   ```
+
 ## 项目组件
 
 1. **AMI创建工具**：`create_pgpool_AMI.py` - 用于创建预配置的Pgpool-II和pgdoctor AMI
@@ -24,6 +45,10 @@
 首先，使用`create_pgpool_AMI.py`脚本创建包含Pgpool-II和pgdoctor的AMI：
 
 ```bash
+# 安装所需的依赖
+pip install boto3
+
+# 执行AMI创建脚本
 python create_pgpool_AMI.py <region_name> <cluster_endpoint> <reader_endpoint> [db_user] [db_password] [instance_type]
 ```
 

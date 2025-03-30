@@ -23,9 +23,22 @@
 2. 安装了AWS CDK CLI
 3. 配置了AWS凭证
 
-## 部署说明
+## 获取和准备项目
 
-### 1. 安装依赖
+### 1. 获取项目代码
+
+如果您还没有获取项目代码，可以通过以下方式获取：
+
+```bash
+# 使用Git克隆
+git clone https://github.com/yourusername/pgpool-cluster-auto.git
+cd pgpool-cluster-auto/pgpool_aurora_cdk
+
+# 或者，如果您已下载并解压ZIP文件
+cd pgpool-cluster-auto-main/pgpool_aurora_cdk
+```
+
+### 2. 安装依赖
 
 ```bash
 # 创建并激活虚拟环境
@@ -34,9 +47,12 @@ source .venv/bin/activate
 
 # 安装依赖
 pip install -r requirements.txt
+
+# 安装AWS CDK CLI（如果尚未安装）
+npm install -g aws-cdk
 ```
 
-### 2. 初始化CDK环境（首次使用）
+### 3. 初始化CDK环境（首次使用）
 
 首先，检查是否已在目标区域初始化CDK环境：
 
@@ -56,7 +72,7 @@ cdk bootstrap aws://ACCOUNT-NUMBER/REGION
 
 bootstrap过程会在您的账户中创建必要的资源，包括S3存储桶和IAM角色，以支持CDK部署。这是一次性操作，每个区域只需执行一次。
 
-### 3. 配置参数
+### 4. 配置参数
 
 可以通过CDK上下文参数配置部署选项：
 
@@ -73,7 +89,7 @@ cdk deploy -c ami_id=ami-xxxxxxxxxx \
            -c db_replica_count=1
 ```
 
-### 4. 部署前验证
+### 5. 部署前验证
 
 在执行部署前，可以使用以下命令查看将要创建的资源：
 
@@ -98,7 +114,7 @@ cdk diff -c ami_id=ami-xxxxxxxxxx [其他参数]
 | db_instance_class | Aurora实例类型 | db.t3.medium | 否 |
 | db_replica_count | Aurora只读副本数量 | 1 | 否 |
 
-### 5. 执行部署
+### 6. 执行部署
 
 执行以下命令开始部署：
 
@@ -108,7 +124,7 @@ cdk deploy -c ami_id=ami-xxxxxxxxxx [其他参数]
 
 部署过程中，CDK会显示将要创建的IAM权限，需要确认后继续。
 
-### 6. 部署输出
+### 7. 部署输出
 
 部署成功后，CDK会输出重要的资源信息：
 
