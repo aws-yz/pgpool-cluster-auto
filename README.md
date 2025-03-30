@@ -44,8 +44,74 @@ cd pgpool_aurora_cdk
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-cdk deploy -c ami_id=<AMI_ID> [其他参数]
 ```
+
+#### 部署参数说明
+
+CDK部署时可以通过上下文参数配置多种选项：
+
+| 参数 | 描述 | 默认值 | 是否必需 |
+|------|------|--------|----------|
+| ami_id | Pgpool-II AMI ID | - | 是 |
+| vpc_id | 现有VPC ID | - | 否，不提供将创建新VPC |
+| subnet_ids | 子网ID列表，逗号分隔 | - | 否，不提供将使用VPC默认子网 |
+| instance_type | Pgpool-II实例类型 | t3.medium | 否 |
+| disk_size | Pgpool-II实例磁盘大小(GB) | 20 | 否 |
+| min_capacity | Auto Scaling Group最小容量 | 2 | 否 |
+| max_capacity | Auto Scaling Group最大容量 | 4 | 否 |
+| desired_capacity | Auto Scaling Group期望容量 | 2 | 否 |
+| db_instance_class | Aurora实例类型 | db.t3.medium | 否 |
+| db_replica_count | Aurora只读副本数量 | 1 | 否 |
+
+#### 部署命令示例
+
+基本部署（仅提供必需参数）：
+```bash
+cdk deploy -c ami_id=ami-0123456789abcdef0
+```
+
+完整参数部署示例：
+```bash
+cdk deploy -c ami_id=ami-0123456789abcdef0 \
+           -c vpc_id=vpc-0123456789abcdef0 \
+           -c subnet_ids=subnet-0123456789abcdef0,subnet-0123456789abcdef1 \
+           -c instance_type=t3.large \
+           -c disk_size=50 \
+           -c min_capacity=2 \
+           -c max_capacity=6 \
+           -c desired_capacity=3 \
+           -c db_instance_class=db.r5.large \
+           -c db_replica_count=2
+```
+
+#### 部署流程
+
+1. **检查CDK环境**：
+   首先，检查是否已在目标区域初始化CDK环境：
+   ```bash
+   aws cloudformation describe-stacks --stack-name CDKToolkit
+   ```
+   如果命令返回错误"Stack with id CDKToolkit does not exist"，则需要执行初始化。
+
+2. **初始化部署**（如果需要）：
+   ```bash
+   cdk bootstrap aws://ACCOUNT-NUMBER/REGION
+   ```
+   注意：如果是首次在账户/区域使用CDK，需要执行此命令
+
+3. **查看变更**：
+   ```bash
+   cdk diff -c ami_id=ami-0123456789abcdef0
+   ```
+   这将显示将要创建的资源，但不会实际部署
+
+4. **执行部署**：
+   ```bash
+   cdk deploy -c ami_id=ami-0123456789abcdef0 [其他参数]
+   ```
+
+5. **查看输出**：
+   部署完成后，CDK会输出重要的资源信息，如NLB端点和Aurora集群端点
 
 详细的部署说明请参考 [pgpool_aurora_cdk/README.md](pgpool_aurora_cdk/README.md)。
 

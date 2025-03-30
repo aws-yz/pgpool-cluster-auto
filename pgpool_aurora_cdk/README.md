@@ -36,7 +36,27 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 2. 配置参数
+### 2. 初始化CDK环境（首次使用）
+
+首先，检查是否已在目标区域初始化CDK环境：
+
+```bash
+aws cloudformation describe-stacks --stack-name CDKToolkit
+```
+
+如果命令返回错误"Stack with id CDKToolkit does not exist"，则表示需要执行初始化。
+
+如果是首次在AWS账户/区域使用CDK，需要执行bootstrap命令：
+
+```bash
+cdk bootstrap aws://ACCOUNT-NUMBER/REGION
+```
+
+替换`ACCOUNT-NUMBER`为您的AWS账户ID，`REGION`为您要部署的区域。
+
+bootstrap过程会在您的账户中创建必要的资源，包括S3存储桶和IAM角色，以支持CDK部署。这是一次性操作，每个区域只需执行一次。
+
+### 3. 配置参数
 
 可以通过CDK上下文参数配置部署选项：
 
@@ -53,62 +73,52 @@ cdk deploy -c ami_id=ami-xxxxxxxxxx \
            -c db_replica_count=1
 ```
 
-### 参数说明
+### 4. 部署前验证
 
-| 参数 | 描述 | 默认值 |
-|------|------|--------|
-| ami_id | Pgpool-II AMI ID（必需） | - |
-| vpc_id | 现有VPC ID（可选，如不提供将创建新VPC） | - |
-| subnet_ids | 子网ID列表，逗号分隔（可选） | - |
-| instance_type | Pgpool-II实例类型 | t3.medium |
-| disk_size | Pgpool-II实例磁盘大小(GB) | 20 |
-| min_capacity | Auto Scaling Group最小容量 | 2 |
-| max_capacity | Auto Scaling Group最大容量 | 4 |
-| desired_capacity | Auto Scaling Group期望容量 | 2 |
-| db_instance_class | Aurora实例类型 | db.t3.medium |
-| db_replica_count | Aurora只读副本数量 | 1 |
-
-## 最佳实践
-
-1. **高可用性**：
-   - 确保Pgpool-II实例部署在至少两个可用区
-   - Aurora集群也应跨多个可用区部署
-
-2. **安全性**：
-   - 使用密钥管理服务(KMS)加密Aurora数据
-   - 实现精细的安全组规则
-   - 使用Secrets Manager存储数据库凭证
-
-3. **监控**：
-   - 设置CloudWatch告警监控关键指标
-   - 配置SNS通知机制
-
-4. **备份**：
-   - 配置Aurora自动备份策略
-
-## 部署后验证
-
-部署完成后，您可以通过以下方式验证架构：
-
-1. 连接到NLB端点（输出中的`NLBEndpoint`）
-2. 使用PostgreSQL客户端工具连接（端口5432）
-3. 验证连接池和负载均衡功能
-
-## 清理资源
-
-要删除所有创建的资源，运行：
+在执行部署前，可以使用以下命令查看将要创建的资源：
 
 ```bash
-cdk destroy
+cdk diff -c ami_id=ami-xxxxxxxxxx [其他参数]
 ```
 
-## 故障排除
+这将显示CloudFormation将要执行的变更，但不会实际部署资源。
 
-1. **连接问题**：
-   - 检查安全组规则
-   - 验证NLB健康检查配置
-   - 检查Pgpool-II和pgdoctor服务状态
+### 参数说明
 
-2. **扩展问题**：
-   - 检查Auto Scaling Group配置
-   - 查看CloudWatch指标和告警
+| 参数 | 描述 | 默认值 | 是否必需 |
+|------|------|--------|----------|
+| ami_id | Pgpool-II AMI ID | - | 是 |
+| vpc_id | 现有VPC ID | - | 否，不提供将创建新VPC |
+| subnet_ids | 子网ID列表，逗号分隔 | - | 否，不提供将使用VPC默认子网 |
+| instance_type | Pgpool-II实例类型 | t3.medium | 否 |
+| disk_size | Pgpool-II实例磁盘大小(GB) | 20 | 否 |
+| min_capacity | Auto Scaling Group最小容量 | 2 | 否 |
+| max_capacity | Auto Scaling Group最大容量 | 4 | 否 |
+| desired_capacity | Auto Scaling Group期望容量 | 2 | 否 |
+| db_instance_class | Aurora实例类型 | db.t3.medium | 否 |
+| db_replica_count | Aurora只读副本数量 | 1 | 否 |
+
+### 5. 执行部署
+
+执行以下命令开始部署：
+
+```bash
+cdk deploy -c ami_id=ami-xxxxxxxxxx [其他参数]
+```
+
+部署过程中，CDK会显示将要创建的IAM权限，需要确认后继续。
+
+### 6. 部署输出
+
+部署成功后，CDK会输出重要的资源信息：
+
+- **NLBEndpoint**: 网络负载均衡器端点，用于连接Pgpool
+- **AuroraClusterEndpoint**: Aurora集群写入端点
+- **AuroraReaderEndpoint**: Aurora集群读取端点
+- **DatabaseSecretArn**: 数据库凭证密钥ARN
+
+这些输出值可以在AWS控制台的CloudFormation服务中查看，或通过以下命令获取：
+
+```bash
+aws cloudformation describe-stacks --stack-name PgpoolAuroraStack --query "Stacks[0].Outputs"
+```
