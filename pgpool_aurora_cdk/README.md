@@ -31,7 +31,7 @@
 
 ```bash
 # 使用Git克隆
-git clone https://github.com/yourusername/pgpool-cluster-auto.git
+git clone https://github.com/wangyunzhang/pgpool-cluster-auto.git
 cd pgpool-cluster-auto/pgpool_aurora_cdk
 
 # 或者，如果您已下载并解压ZIP文件
