@@ -2,6 +2,12 @@
 
 这个项目实现了一个高可用的Pgpool-II与Aurora PostgreSQL架构，使用AWS CDK进行基础设施即代码部署。
 
+## 项目文档说明
+
+本项目包含两个README文件：
+- **根目录README.md**（当前文件）：提供项目概述、架构说明和完整流程指南
+- **[pgpool_aurora_cdk/README.md](pgpool_aurora_cdk/README.md)**：提供CDK部署的详细步骤和技术细节
+
 ## 获取项目代码
 
 您可以通过以下方式获取项目代码：
