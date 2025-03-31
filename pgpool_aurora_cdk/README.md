@@ -390,7 +390,10 @@ aws cloudformation describe-stacks --stack-name PgpoolAuroraStack --query "Stack
    要删除所有资源，运行：
    
    ```bash
-   cdk destroy
+   cdk destroy -c ami_id=<AMI_ID>
    ```
    
-   注意：删除堆栈会删除所有相关资源，包括数据库。默认情况下，Aurora集群会创建最终快照。
+   注意：
+   - 删除堆栈会删除所有相关资源，包括数据库。默认情况下，Aurora集群会创建最终快照。
+   - 必须提供`ami_id`参数，因为app.py中的验证检查在destroy操作期间也会运行。
+   - 可以使用任何有效的AMI ID，因为destroy操作不会实际使用该值。

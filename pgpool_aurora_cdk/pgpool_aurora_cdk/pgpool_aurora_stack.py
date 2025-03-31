@@ -90,6 +90,13 @@ class PgpoolAuroraStack(Stack):
             description="Security group for Network Load Balancer",
             allow_all_outbound=True
         )
+        
+        # Allow incoming PostgreSQL traffic from internet to NLB
+        nlb_sg.add_ingress_rule(
+            ec2.Peer.any_ipv4(),
+            ec2.Port.tcp(5432),
+            "Allow PostgreSQL traffic from internet"
+        )
 
         # Allow pgpool to access Aurora
         aurora_sg.add_ingress_rule(
@@ -118,7 +125,9 @@ class PgpoolAuroraStack(Stack):
             generate_secret_string=secretsmanager.SecretStringGenerator(
                 secret_string_template=json.dumps({"username": "pdadmin"}),
                 generate_string_key="password",
-                exclude_characters="\"@/\\"
+                exclude_characters="\"@/\\'",  # Exclude single quotes to avoid escaping issues
+                exclude_punctuation=False,
+                include_space=False
             )
         )
 
@@ -182,21 +191,23 @@ DB_CREDS=$(aws secretsmanager get-secret-value --secret-id {db_credentials.secre
 DB_USERNAME=$(echo $DB_CREDS | jq -r '.username')
 DB_PASSWORD=$(echo $DB_CREDS | jq -r '.password')
 
-# Properly escape the password for use in pgpool.conf
-# Replace single quotes with doubled single quotes
+# Properly escape the password for use in pgpool.conf and pgdoctor.cfg
+# Replace single quotes with doubled single quotes for PostgreSQL-style configs
 ESCAPED_PASSWORD=$(echo "$DB_PASSWORD" | sed "s/'/''/g")
 
 # Update Pgpool configuration with Aurora endpoints
 sed -i "s/backend_hostname0 = '.*'/backend_hostname0 = '{aurora_cluster.cluster_endpoint.hostname}'/" /usr/local/etc/pgpool.conf
 sed -i "s/backend_hostname1 = '.*'/backend_hostname1 = '{aurora_cluster.cluster_read_endpoint.hostname}'/" /usr/local/etc/pgpool.conf
 sed -i "s/sr_check_user = '.*'/sr_check_user = '$DB_USERNAME'/" /usr/local/etc/pgpool.conf
-sed -i "s/^sr_check_password = .*/sr_check_password = '$ESCAPED_PASSWORD'/" /usr/local/etc/pgpool.conf
+
+# Use perl for more reliable handling of special characters in passwords
+perl -i -pe "s/^sr_check_password = .*/sr_check_password = '$ESCAPED_PASSWORD'/" /usr/local/etc/pgpool.conf
 sed -i "s/health_check_user = '.*'/health_check_user = '$DB_USERNAME'/" /usr/local/etc/pgpool.conf
-sed -i "s/^health_check_password = .*/health_check_password = '$ESCAPED_PASSWORD'/" /usr/local/etc/pgpool.conf
+perl -i -pe "s/^health_check_password = .*/health_check_password = '$ESCAPED_PASSWORD'/" /usr/local/etc/pgpool.conf
 
 # Update pgdoctor configuration - also using single quotes with proper escaping
 sed -i "s/^pg_user = '.*'/pg_user = '$DB_USERNAME'/" /etc/pgdoctor.cfg
-sed -i "s/^pg_password = '.*'/pg_password = '$ESCAPED_PASSWORD'/" /etc/pgdoctor.cfg
+perl -i -pe "s/^pg_password = .*/pg_password = '$ESCAPED_PASSWORD'/" /etc/pgdoctor.cfg
 
 # Update pool_passwd file with database credentials
 echo "$DB_USERNAME:$DB_PASSWORD" > /usr/local/etc/pool_passwd
