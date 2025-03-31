@@ -107,15 +107,35 @@ aws cloudformation describe-stacks --stack-name CDKToolkit
 
 如果命令返回错误"Stack with id CDKToolkit does not exist"，则表示需要执行初始化。
 
-如果是首次在AWS账户/区域使用CDK，需要执行bootstrap命令：
+如果是首次在AWS账户/区域使用CDK，需要执行bootstrap命令。**注意：bootstrap命令应在项目目录外执行，以避免项目配置干扰**：
 
 ```bash
-cdk bootstrap aws://ACCOUNT-NUMBER/REGION
+# 切换到用户主目录或任何非项目目录
+cd ~
+
+# 使用npx执行bootstrap命令
+npx cdk bootstrap aws://ACCOUNT-NUMBER/REGION
 ```
 
 替换`ACCOUNT-NUMBER`为您的AWS账户ID，`REGION`为您要部署的区域。
 
+如果您在项目目录中执行bootstrap命令，可能会遇到错误，因为项目的app.py要求提供ami_id参数。在这种情况下，您可以：
+
+1. 在项目目录外执行bootstrap命令（推荐方法），或
+2. 在执行bootstrap时提供必要的参数：
+   ```bash
+   cdk bootstrap aws://ACCOUNT-NUMBER/REGION -c ami_id=dummy-value
+   ```
+
 bootstrap过程会在您的账户中创建必要的资源，包括S3存储桶和IAM角色，以支持CDK部署。这是一次性操作，每个区域只需执行一次。
+
+如果bootstrap过程失败并显示`ROLLBACK_COMPLETE`状态，您需要先删除失败的堆栈，然后重新尝试：
+
+```bash
+aws cloudformation delete-stack --stack-name CDKToolkit
+aws cloudformation wait stack-delete-complete --stack-name CDKToolkit
+npx cdk bootstrap aws://ACCOUNT-NUMBER/REGION
+```
 
 ### 4. 配置参数
 

@@ -126,9 +126,20 @@ cdk deploy -c ami_id=ami-0123456789abcdef0 \
 
 2. **初始化部署**（如果需要）：
    ```bash
-   cdk bootstrap aws://ACCOUNT-NUMBER/REGION
+   # 切换到项目目录外执行bootstrap命令
+   cd ~
+   npx cdk bootstrap aws://ACCOUNT-NUMBER/REGION
    ```
-   注意：如果是首次在账户/区域使用CDK，需要执行此命令
+   
+   **重要提示**：
+   - bootstrap命令应在项目目录外执行，以避免项目配置干扰
+   - 如果在项目目录内执行，需要提供ami_id参数：`cdk bootstrap aws://ACCOUNT-NUMBER/REGION -c ami_id=dummy-value`
+   - 如果bootstrap失败并显示`ROLLBACK_COMPLETE`状态，需要先删除失败的堆栈再重试：
+     ```bash
+     aws cloudformation delete-stack --stack-name CDKToolkit
+     aws cloudformation wait stack-delete-complete --stack-name CDKToolkit
+     npx cdk bootstrap aws://ACCOUNT-NUMBER/REGION
+     ```
 
 3. **查看变更**：
    ```bash
