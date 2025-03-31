@@ -182,20 +182,24 @@ DB_CREDS=$(aws secretsmanager get-secret-value --secret-id {db_credentials.secre
 DB_USERNAME=$(echo $DB_CREDS | jq -r '.username')
 DB_PASSWORD=$(echo $DB_CREDS | jq -r '.password')
 
+# Properly escape the password for use in pgpool.conf
+# Replace single quotes with doubled single quotes
+ESCAPED_PASSWORD=$(echo "$DB_PASSWORD" | sed "s/'/''/g")
+
 # Update Pgpool configuration with Aurora endpoints
 sed -i "s/backend_hostname0 = '.*'/backend_hostname0 = '{aurora_cluster.cluster_endpoint.hostname}'/" /usr/local/etc/pgpool.conf
 sed -i "s/backend_hostname1 = '.*'/backend_hostname1 = '{aurora_cluster.cluster_read_endpoint.hostname}'/" /usr/local/etc/pgpool.conf
 sed -i "s/sr_check_user = '.*'/sr_check_user = '$DB_USERNAME'/" /usr/local/etc/pgpool.conf
-sed -i "s/sr_check_password = '.*'/sr_check_password = '$DB_PASSWORD'/" /usr/local/etc/pgpool.conf
+sed -i "s/^sr_check_password = .*/sr_check_password = '$ESCAPED_PASSWORD'/" /usr/local/etc/pgpool.conf
 sed -i "s/health_check_user = '.*'/health_check_user = '$DB_USERNAME'/" /usr/local/etc/pgpool.conf
-sed -i "s/health_check_password = '.*'/health_check_password = '$DB_PASSWORD'/" /usr/local/etc/pgpool.conf
+sed -i "s/^health_check_password = .*/health_check_password = '$ESCAPED_PASSWORD'/" /usr/local/etc/pgpool.conf
 
-# Update pgdoctor configuration
-sed -i "s/pg_user = '.*'/pg_user = '$DB_USERNAME'/" /etc/pgdoctor.cfg
-sed -i "s/pg_password = '.*'/pg_password = '$DB_PASSWORD'/" /etc/pgdoctor.cfg
+# Update pgdoctor configuration - also using single quotes with proper escaping
+sed -i "s/^pg_user = '.*'/pg_user = '$DB_USERNAME'/" /etc/pgdoctor.cfg
+sed -i "s/^pg_password = '.*'/pg_password = '$ESCAPED_PASSWORD'/" /etc/pgdoctor.cfg
 
 # Update pool_passwd file with database credentials
-echo "${DB_USERNAME}:${DB_PASSWORD}" > /usr/local/etc/pool_passwd
+echo "$DB_USERNAME:$DB_PASSWORD" > /usr/local/etc/pool_passwd
 chmod 600 /usr/local/etc/pool_passwd
 chown pgpool:pgpool /usr/local/etc/pool_passwd
 
