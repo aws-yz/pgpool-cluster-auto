@@ -4,6 +4,7 @@ from aws_cdk import (
     aws_rds as rds,
     aws_autoscaling as autoscaling,
     aws_elasticloadbalancingv2 as elbv2,
+    aws_elasticloadbalancingv2_targets as elbv2_targets,
     aws_iam as iam,
     aws_secretsmanager as secretsmanager,
     aws_cloudwatch as cloudwatch,
@@ -130,7 +131,14 @@ class PgpoolAuroraStack(Stack):
             instance_props=rds.InstanceProps(
                 vpc=vpc,
                 vpc_subnets=subnet_selection,
-                instance_type=ec2.InstanceType(db_instance_class),
+                # 直接使用db_instance_class，不需要再包装到InstanceType中，避免双重"db."前缀
+                instance_type=ec2.InstanceType.of(
+                    ec2.InstanceClass.BURSTABLE3, 
+                    ec2.InstanceSize.MEDIUM
+                ) if db_instance_class == "db.t3.medium" else ec2.InstanceType.of(
+                    ec2.InstanceClass.MEMORY5, 
+                    ec2.InstanceSize.LARGE
+                ),
                 security_groups=[aurora_sg],
                 allow_major_version_upgrade=False,
                 auto_minor_version_upgrade=True,
@@ -147,8 +155,7 @@ class PgpoolAuroraStack(Stack):
             ),
             storage_encrypted=True,
             removal_policy=RemovalPolicy.SNAPSHOT,
-            cloudwatch_logs_exports=["postgresql"],
-            cloudwatch_logs_retention=cloudwatch.RetentionDays.ONE_MONTH
+            cloudwatch_logs_exports=["postgresql"]
         )
 
         # Create IAM role for EC2 instances
@@ -186,6 +193,11 @@ sed -i "s/health_check_password = '.*'/health_check_password = '$DB_PASSWORD'/" 
 # Update pgdoctor configuration
 sed -i "s/pg_user = '.*'/pg_user = '$DB_USERNAME'/" /etc/pgdoctor.cfg
 sed -i "s/pg_password = '.*'/pg_password = '$DB_PASSWORD'/" /etc/pgdoctor.cfg
+
+# Update pool_passwd file with database credentials
+echo "${DB_USERNAME}:${DB_PASSWORD}" > /usr/local/etc/pool_passwd
+chmod 600 /usr/local/etc/pool_passwd
+chown pgpool:pgpool /usr/local/etc/pool_passwd
 
 # Restart services
 systemctl restart pgpool
@@ -249,7 +261,8 @@ systemctl restart pgdoctor
                 subnet_type=ec2.SubnetType.PUBLIC
             ),
             internet_facing=True,
-            cross_zone_enabled=True
+            cross_zone_enabled=True,
+            security_groups=[nlb_sg]  # Attach security group directly to NLB
         )
 
         # Add listener for Pgpool
