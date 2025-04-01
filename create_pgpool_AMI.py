@@ -146,16 +146,15 @@ disable_load_balance_on_write = 'transaction'
 # Aurora streaming replication settings
 backend_clustering_mode = 'streaming_replication'
 sr_check_period = 0
-enable_pool_hba = on
-pool_hba_file = '/usr/local/etc/pool_hba.conf'
-pool_passwd = '/usr/local/etc/pool_passwd'
+enable_pool_hba = off
+pool_passwd = 'pool_passwd'
 health_check_period = 0
 failover_on_backend_error = off
 
 # Backend settings
 backend_hostname0 = '{cluster_endpoint}'
 backend_port0 = 5432
-backend_weight0 = 1
+backend_weight0 = 10
 backend_flag0 = 'ALWAYS_PRIMARY|DISALLOW_TO_FAILOVER'
 backend_data_directory0 = '/tmp'
 backend_application_name0 = 'main'
@@ -167,16 +166,11 @@ backend_flag1 = 'DISALLOW_TO_FAILOVER'
 backend_data_directory1 = '/tmp'
 backend_application_name1 = 'replica'
 
-# Aurora connection settings
-sr_check_user = '{db_user}'
-sr_check_password = '{db_password}'
-health_check_user = '{db_user}'
-health_check_password = '{db_password}'
-
 # Connection settings
 num_init_children = 32
 max_pool = 4
 authentication_timeout = 60
+allow_clear_text_frontend_auth
 
 # SSL settings
 ssl = off
@@ -191,10 +185,10 @@ host    all         all         ::1/128               trust
 host    all         all         0.0.0.0/0             scram-sha-256
 EOF
 
-# 创建pool_passwd文件
-echo "{db_user}:{db_password}" > /usr/local/etc/pool_passwd
+# 创建空的pool_passwd文件
+touch /usr/local/etc/pool_passwd
 
-# 设置配置文件权限
+# 设置配置文件权限y
 chown pgpool:pgpool /usr/local/etc/pgpool.conf
 chmod 600 /usr/local/etc/pgpool.conf
 chown pgpool:pgpool /usr/local/etc/pool_hba.conf
