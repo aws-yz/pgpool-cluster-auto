@@ -154,14 +154,14 @@ failover_on_backend_error = off
 # Backend settings
 backend_hostname0 = '{cluster_endpoint}'
 backend_port0 = 5432
-backend_weight0 = 10
+backend_weight0 = 1
 backend_flag0 = 'ALWAYS_PRIMARY|DISALLOW_TO_FAILOVER'
 backend_data_directory0 = '/tmp'
 backend_application_name0 = 'main'
 
 backend_hostname1 = '{reader_endpoint}'
 backend_port1 = 5432
-backend_weight1 = 1
+backend_weight1 = 10
 backend_flag1 = 'DISALLOW_TO_FAILOVER'
 backend_data_directory1 = '/tmp'
 backend_application_name1 = 'replica'
