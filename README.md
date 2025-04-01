@@ -55,13 +55,13 @@ cd pgpool-cluster-auto
 pip install boto3
 
 # 执行AMI创建脚本
-python create_pgpool_AMI.py <region_name> <cluster_endpoint> <reader_endpoint> [db_user] [db_password] [instance_type]
+python create_pgpool_AMI.py <region_name> [cluster_endpoint] [reader_endpoint] [db_user] [db_password] [instance_type]
 ```
 
 参数说明：
 - `region_name`: AWS区域
-- `cluster_endpoint`: Aurora集群写入端点（用于测试配置）
-- `reader_endpoint`: Aurora集群读取端点（用于测试配置）
+- `cluster_endpoint`: Aurora集群写入端点（可选，默认为'your-aurora-cluster-endpoint'）
+- `reader_endpoint`: Aurora集群读取端点（可选，默认为'your-aurora-reader-endpoint'）
 - `db_user`: 数据库用户名（可选，默认为'pdadmin'）
 - `db_password`: 数据库密码（可选，默认为'1qaz2wsx'）
 - `instance_type`: 用于构建AMI的实例类型（可选，默认为't3.micro'）

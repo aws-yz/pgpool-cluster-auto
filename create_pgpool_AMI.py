@@ -2,7 +2,7 @@ import boto3
 import time
 import sys
 
-def create_pgpool_ami(region_name, cluster_endpoint, reader_endpoint, db_user='pdadmin', db_password='1qaz2wsx', instance_type='t3.micro'):
+def create_pgpool_ami(region_name, cluster_endpoint="your-aurora-cluster-endpoint", reader_endpoint="your-aurora-reader-endpoint", db_user='pdadmin', db_password='1qaz2wsx', instance_type='t3.micro'):
     # 初始化EC2客户端
     ec2 = boto3.client('ec2', region_name=region_name)
     
@@ -146,9 +146,8 @@ disable_load_balance_on_write = 'transaction'
 # Aurora streaming replication settings
 backend_clustering_mode = 'streaming_replication'
 sr_check_period = 0
-enable_pool_hba = on
-pool_hba_file = '/usr/local/etc/pool_hba.conf'
-pool_passwd = '/usr/local/etc/pool_passwd'
+enable_pool_hba = off
+pool_passwd = 'pool_passwd'
 health_check_period = 0
 failover_on_backend_error = off
 
@@ -162,21 +161,16 @@ backend_application_name0 = 'main'
 
 backend_hostname1 = '{reader_endpoint}'
 backend_port1 = 5432
-backend_weight1 = 1
+backend_weight1 = 10
 backend_flag1 = 'DISALLOW_TO_FAILOVER'
 backend_data_directory1 = '/tmp'
 backend_application_name1 = 'replica'
-
-# Aurora connection settings
-sr_check_user = '{db_user}'
-sr_check_password = '{db_password}'
-health_check_user = '{db_user}'
-health_check_password = '{db_password}'
 
 # Connection settings
 num_init_children = 32
 max_pool = 4
 authentication_timeout = 60
+allow_clear_text_frontend_auth
 
 # SSL settings
 ssl = off
@@ -191,10 +185,10 @@ host    all         all         ::1/128               trust
 host    all         all         0.0.0.0/0             scram-sha-256
 EOF
 
-# 创建pool_passwd文件
-echo "{db_user}:{db_password}" > /usr/local/etc/pool_passwd
+# 创建空的pool_passwd文件
+touch /usr/local/etc/pool_passwd
 
-# 设置配置文件权限
+# 设置配置文件权限y
 chown pgpool:pgpool /usr/local/etc/pgpool.conf
 chmod 600 /usr/local/etc/pgpool.conf
 chown pgpool:pgpool /usr/local/etc/pool_hba.conf
@@ -369,13 +363,13 @@ touch /tmp/ami_ready
     return ami_id
 
 if __name__ == "__main__":
-    if len(sys.argv) < 4:
-        print("用法: python create_pgpool_ami.py <region_name> <cluster_endpoint> <reader_endpoint> [db_user] [db_password] [instance_type]")
+    if len(sys.argv) < 2:
+        print("用法: python create_pgpool_ami.py <region_name> [cluster_endpoint] [reader_endpoint] [db_user] [db_password] [instance_type]")
         sys.exit(1)
     
     region = sys.argv[1]
-    cluster_endpoint = sys.argv[2]
-    reader_endpoint = sys.argv[3]
+    cluster_endpoint = sys.argv[2] if len(sys.argv) > 2 else "your-aurora-cluster-endpoint"
+    reader_endpoint = sys.argv[3] if len(sys.argv) > 3 else "your-aurora-reader-endpoint"
     db_user = sys.argv[4] if len(sys.argv) > 4 else 'pdadmin'
     db_password = sys.argv[5] if len(sys.argv) > 5 else '1qaz2wsx'
     instance_type = sys.argv[6] if len(sys.argv) > 6 else 't3.micro'

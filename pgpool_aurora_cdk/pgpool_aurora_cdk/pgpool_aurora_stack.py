@@ -193,21 +193,25 @@ DB_CREDS=$(aws secretsmanager get-secret-value --secret-id {db_credentials.secre
 DB_USERNAME=$(echo $DB_CREDS | jq -r '.username')
 DB_PASSWORD=$(echo $DB_CREDS | jq -r '.password')
 
-# Properly escape the password for use in pgpool.conf and pgdoctor.cfg
-# Replace single quotes with doubled single quotes for PostgreSQL-style configs
-ESCAPED_PASSWORD=$(echo "$DB_PASSWORD" | sed "s/'/''/g")
-
 # Update Pgpool configuration with Aurora endpoints
 sed -i "s/backend_hostname0 = '.*'/backend_hostname0 = '{aurora_cluster.cluster_endpoint.hostname}'/" /usr/local/etc/pgpool.conf
 sed -i "s/backend_hostname1 = '.*'/backend_hostname1 = '{aurora_cluster.cluster_read_endpoint.hostname}'/" /usr/local/etc/pgpool.conf
-sed -i "s/sr_check_user = '.*'/sr_check_user = '$DB_USERNAME'/" /usr/local/etc/pgpool.conf
 
-# Use perl for more reliable handling of special characters in passwords
-perl -i -pe "s/^sr_check_password = .*/sr_check_password = '$ESCAPED_PASSWORD'/" /usr/local/etc/pgpool.conf
-sed -i "s/health_check_user = '.*'/health_check_user = '$DB_USERNAME'/" /usr/local/etc/pgpool.conf
-perl -i -pe "s/^health_check_password = .*/health_check_password = '$ESCAPED_PASSWORD'/" /usr/local/etc/pgpool.conf
+# Ensure allow_clear_text_frontend_auth is enabled with correct value
+if grep -q "allow_clear_text_frontend_auth" /usr/local/etc/pgpool.conf; then
+    sed -i "s/allow_clear_text_frontend_auth.*/allow_clear_text_frontend_auth = on/" /usr/local/etc/pgpool.conf
+else
+    echo "allow_clear_text_frontend_auth = on" >> /usr/local/etc/pgpool.conf
+fi
 
-# Update pgdoctor configuration - removing quotes to fix connection string issues
+# Create empty pool_passwd file if it doesn't exist
+if [ ! -f /usr/local/etc/pool_passwd ]; then
+    touch /usr/local/etc/pool_passwd
+    chmod 600 /usr/local/etc/pool_passwd
+    chown pgpool:pgpool /usr/local/etc/pool_passwd
+fi
+
+# Update pgdoctor configuration
 cat > /etc/pgdoctor.cfg << EOF
 # Runtime settings
 http_port = 8071
