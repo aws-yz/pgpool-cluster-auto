@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 import os
+import sys
 import aws_cdk as cdk
 from pgpool_aurora_cdk.pgpool_aurora_stack import PgpoolAuroraStack
 
 app = cdk.App()
+
+# Skip ami_id validation for bootstrap command
+is_bootstrap = len(sys.argv) > 1 and sys.argv[1] == "bootstrap"
 
 # Get parameters from context or use defaults
 vpc_id = app.node.try_get_context("vpc_id")
@@ -17,9 +21,13 @@ desired_capacity = int(app.node.try_get_context("desired_capacity") or "2")
 db_instance_class = app.node.try_get_context("db_instance_class") or "db.t3.medium"
 db_replica_count = int(app.node.try_get_context("db_replica_count") or "1")
 
-# Validate required parameters
-if not ami_id:
+# Validate required parameters - skip for bootstrap
+if not ami_id and not is_bootstrap:
     raise ValueError("ami_id is required. Please provide it using -c ami_id=<AMI_ID>")
+
+# Use a dummy AMI ID for bootstrap if none provided
+if is_bootstrap and not ami_id:
+    ami_id = "ami-dummy-for-bootstrap"
 
 # Create the stack
 PgpoolAuroraStack(app, "PgpoolAuroraStack",

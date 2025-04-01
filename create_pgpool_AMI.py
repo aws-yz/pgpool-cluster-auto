@@ -239,18 +239,18 @@ sudo make install
 chown pgpool:pgpool /usr/local/bin/pgdoctor
 chmod 755 /usr/local/bin/pgdoctor
 
-# 配置pgdoctor
+# 配置pgdoctor - 不使用引号以避免连接字符串解析错误
 cat > /etc/pgdoctor.cfg << EOF
 # Runtime settings
 http_port = 8071
 syslog_facility = local7
 
 # PostgreSQL connection settings
-pg_host = '127.0.0.1'
+pg_host = 127.0.0.1
 pg_port = 9999
-pg_user = '{db_user}'
-pg_password = '{db_password}'
-pg_database = 'postgres'
+pg_user = {db_user}
+pg_password = {db_password}
+pg_database = postgres
 pg_connection_timeout = 3
 
 # Health check queries through pgpool to Aurora

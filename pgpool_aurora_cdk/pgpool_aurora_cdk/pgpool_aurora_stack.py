@@ -205,9 +205,25 @@ perl -i -pe "s/^sr_check_password = .*/sr_check_password = '$ESCAPED_PASSWORD'/"
 sed -i "s/health_check_user = '.*'/health_check_user = '$DB_USERNAME'/" /usr/local/etc/pgpool.conf
 perl -i -pe "s/^health_check_password = .*/health_check_password = '$ESCAPED_PASSWORD'/" /usr/local/etc/pgpool.conf
 
-# Update pgdoctor configuration - also using single quotes with proper escaping
-sed -i "s/^pg_user = '.*'/pg_user = '$DB_USERNAME'/" /etc/pgdoctor.cfg
-perl -i -pe "s/^pg_password = .*/pg_password = '$ESCAPED_PASSWORD'/" /etc/pgdoctor.cfg
+# Update pgdoctor configuration - removing quotes to fix connection string issues
+cat > /etc/pgdoctor.cfg << EOF
+# Runtime settings
+http_port = 8071
+syslog_facility = local7
+
+# PostgreSQL connection settings
+pg_host = 127.0.0.1
+pg_port = 9999
+pg_user = $DB_USERNAME
+pg_password = $DB_PASSWORD
+pg_database = postgres
+pg_connection_timeout = 3
+
+# Health check queries through pgpool to Aurora
+"SELECT 1"
+EOF
+
+chmod 644 /etc/pgdoctor.cfg
 
 # Update pool_passwd file with database credentials
 echo "$DB_USERNAME:$DB_PASSWORD" > /usr/local/etc/pool_passwd
