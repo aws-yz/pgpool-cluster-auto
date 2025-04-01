@@ -119,14 +119,14 @@ class PgpoolAuroraStack(Stack):
             "Allow NLB to access pgdoctor health check on port 8071"
         )
 
-        # Create database credentials in Secrets Manager with simpler password for pgpool compatibility
+        # Create database credentials in Secrets Manager with Aurora PostgreSQL compatible password
         db_credentials = secretsmanager.Secret(
             self, "AuroraCredentials",
             generate_secret_string=secretsmanager.SecretStringGenerator(
                 secret_string_template=json.dumps({"username": "pdadmin"}),
                 generate_string_key="password",
                 password_length=12,  # Shorter password for better compatibility
-                exclude_characters="\"'\\;`~$%^&*()=+<>,{}[]|/",  # Exclude problematic characters
+                exclude_characters="\"/ @",  # Only exclude characters not allowed by Aurora PostgreSQL
                 exclude_punctuation=False,
                 include_space=False,
                 require_each_included_type=True  # Ensure mix of upper, lower, numbers, and allowed special chars
@@ -227,10 +227,8 @@ EOF
 
 chmod 644 /etc/pgdoctor.cfg
 
-# Update pool_passwd file with database credentials
-echo "$DB_USERNAME:$DB_PASSWORD" > /usr/local/etc/pool_passwd
-chmod 600 /usr/local/etc/pool_passwd
-chown pgpool:pgpool /usr/local/etc/pool_passwd
+# Note: We don't need to update pool_passwd file when allow_clear_text_frontend_auth = on
+# as authentication is passed through to the backend PostgreSQL server
 
 # Restart services
 systemctl restart pgpool
