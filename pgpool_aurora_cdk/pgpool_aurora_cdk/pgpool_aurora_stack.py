@@ -119,15 +119,17 @@ class PgpoolAuroraStack(Stack):
             "Allow NLB to access pgdoctor health check on port 8071"
         )
 
-        # Create database credentials in Secrets Manager
+        # Create database credentials in Secrets Manager with simpler password for pgpool compatibility
         db_credentials = secretsmanager.Secret(
             self, "AuroraCredentials",
             generate_secret_string=secretsmanager.SecretStringGenerator(
                 secret_string_template=json.dumps({"username": "pdadmin"}),
                 generate_string_key="password",
-                exclude_characters="\"@/\\'",  # Exclude single quotes to avoid escaping issues
+                password_length=12,  # Shorter password for better compatibility
+                exclude_characters="\"'\\;`~$%^&*()=+<>,{}[]|/",  # Exclude problematic characters
                 exclude_punctuation=False,
-                include_space=False
+                include_space=False,
+                require_each_included_type=True  # Ensure mix of upper, lower, numbers, and allowed special chars
             )
         )
 

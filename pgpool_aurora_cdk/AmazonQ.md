@@ -129,15 +129,64 @@ EOF
 
 这样配置后，pgdoctor应该能够正确解析连接字符串并连接到PostgreSQL。
 
+## 问题3: Pgpool 认证问题
+
+### 问题描述
+
+修复了pgdoctor配置格式问题后，仍然遇到认证错误：
+```
+Health check result: 500 connection to server at "127.0.0.1", port 9999 failed: ERROR: backend authentication failed
+DETAIL: backend response with kind 'E' when expecting 'R'
+```
+
+### 原因分析
+
+Pgpool在处理复杂密码时可能会遇到问题，特别是包含特殊字符的密码。这可能是由于以下原因：
+
+1. 特殊字符转义问题：某些特殊字符在传递过程中可能未被正确转义
+2. 密码哈希不一致：Pgpool和PostgreSQL使用的密码哈希方法可能不兼容
+3. 字符编码问题：特殊字符在不同组件间传递时可能有编码差异
+4. 引号处理问题：包含引号的密码可能导致命令解析错误
+5. 长度限制：某些认证方法可能对密码长度有隐式限制
+
+### 解决方案
+
+我们修改了密码生成策略，使用更简单但仍然安全的密码：
+
+```python
+# Create database credentials in Secrets Manager with simpler password for pgpool compatibility
+db_credentials = secretsmanager.Secret(
+    self, "AuroraCredentials",
+    generate_secret_string=secretsmanager.SecretStringGenerator(
+        secret_string_template=json.dumps({"username": "pdadmin"}),
+        generate_string_key="password",
+        password_length=12,  # 更短的密码以提高兼容性
+        exclude_characters="\"'\\;`~$%^&*()=+<>,{}[]|/",  # 排除可能导致问题的字符
+        exclude_punctuation=False,
+        include_space=False,
+        require_each_included_type=True  # 确保包含大写、小写、数字和允许的特殊字符
+    )
+)
+```
+
+这种配置：
+1. 将密码长度限制为12个字符（仍然安全但更易于管理）
+2. 排除了可能导致转义问题的特殊字符
+3. 只允许一部分相对安全的特殊字符（如!@#_-）
+4. 确保密码包含大写字母、小写字母、数字和特殊字符
+
 ## 最佳实践
 
 1. CDK bootstrap是一次性操作，为AWS账户和区域设置必要的资源
 2. 确保拥有足够的权限执行bootstrap操作（通常需要管理员权限）
 3. 每个AWS账户和区域只需执行一次bootstrap操作
 4. 配置PostgreSQL连接参数时，避免在值周围使用不必要的引号
+5. 使用简单但安全的密码，避免过于复杂的特殊字符组合
+6. 在故障排除时，先测试直接连接到数据库，确认凭证有效性
 
 ## 参考资源
 
 - [AWS CDK 官方文档 - Bootstrapping](https://docs.aws.amazon.com/cdk/latest/guide/bootstrapping.html)
 - [AWS CDK CLI 命令参考](https://docs.aws.amazon.com/cdk/latest/guide/cli.html)
 - [pgdoctor 文档](https://github.com/thumbtack/pgdoctor)
+- [Pgpool-II 认证配置](https://www.pgpool.net/docs/latest/en/html/auth-methods.html)
