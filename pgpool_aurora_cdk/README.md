@@ -31,22 +31,45 @@
    - 在每个公有子网中创建一个NAT网关
    - 私有子网通过NAT网关访问互联网
 
-### 组件部署位置
+### 组件部署位置与子网选择
+
+#### 默认部署情况（不指定VPC和子网）
 
 1. **NLB部署**：
-   - 默认部署在公有子网中
-   - 用户不需要明确选择public或private
-   - 如需内部NLB（不可从互联网访问），需在代码中明确指定`internet_facing=False`
+   - 默认部署在**公有子网**中
+   - 配置为面向互联网（`internet_facing=True`）
+   - 自动在每个可用区选择一个公有子网，确保跨可用区高可用性
+   - 如需内部NLB（不可从互联网访问），需修改代码指定`internet_facing=False`
 
 2. **Pgpool-II实例**：
-   - 默认部署在私有子网中
+   - 默认部署在**私有子网**中（`PRIVATE_WITH_EGRESS`类型）
    - 通过Auto Scaling Group跨多个可用区部署
    - 实例可以通过NAT网关访问互联网进行更新
+   - 每个可用区至少部署一个实例，确保高可用性
 
 3. **Aurora PostgreSQL**：
-   - 默认部署在私有子网中
+   - 默认部署在**私有子网**中（`PRIVATE_WITH_EGRESS`类型）
    - 写入节点和读取节点分布在不同可用区的私有子网中
    - 不需要直接访问互联网
+   - 自动跨可用区部署以确保高可用性
+
+#### 使用`subnet_ids`参数的子网选择
+
+当使用`-c subnet_ids=subnet-1,subnet-2,subnet-3`参数时：
+
+1. **指定子网的用途**：
+   - 指定的子网**仅用于Pgpool-II实例和Aurora数据库集群**
+   - 这些子网应该是私有子网（`PRIVATE_WITH_EGRESS`类型）
+   - 至少需要提供两个不同可用区的子网以确保高可用性
+
+2. **NLB子网选择**：
+   - **重要**：即使指定了`subnet_ids`，NLB仍然会部署在**公有子网**中
+   - NLB的子网选择不受`subnet_ids`参数影响
+   - 如果指定的VPC没有公有子网，部署将失败
+
+3. **子网数量建议**：
+   - 建议至少提供3个不同可用区的子网
+   - 这样可以确保Aurora和Pgpool-II实例能够跨多个可用区部署
 
 ### 自定义网络配置
 
@@ -57,9 +80,22 @@
    cdk deploy -c ami_id=ami-xxx -c vpc_id=vpc-xxx -c subnet_ids=subnet-1,subnet-2,subnet-3
    ```
 
-2. **遵循最佳实践**：
+2. **内部NLB部署**：
+   如果需要将NLB部署为内部负载均衡器（不可从互联网访问），需要修改代码：
+   ```python
+   # 修改NLB配置为内部NLB
+   nlb = elbv2.NetworkLoadBalancer(
+       self, "PgpoolNLB",
+       vpc=vpc,
+       vpc_subnets=subnet_selection,  # 使用与Pgpool相同的子网选择
+       internet_facing=False,  # 设置为内部NLB
+       cross_zone_enabled=True
+   )
+   ```
+
+3. **遵循最佳实践**：
    - Pgpool-II实例应部署在私有子网中
-   - NLB根据访问需求部署在公有或私有子网中
+   - NLB根据访问需求部署在公有子网（面向互联网）或私有子网（内部访问）
    - Aurora集群应部署在私有或隔离子网中
 
 ## 前提条件
