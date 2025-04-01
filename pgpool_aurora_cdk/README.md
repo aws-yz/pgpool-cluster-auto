@@ -351,6 +351,31 @@ aws cloudformation describe-stacks --stack-name PgpoolAuroraStack --query "Stack
    aws secretsmanager get-secret-value --secret-id <SECRET_ARN> --query SecretString --output text
    ```
 
+4. **pgdoctor健康检查失败**：
+   - 如果遇到错误 `Health check result: 500 unterminated quoted string in connection info string`
+   - 检查pgdoctor配置文件中的连接参数是否使用了引号
+   
+   ```bash
+   # 查看pgdoctor配置
+   cat /etc/pgdoctor.cfg
+   
+   # 正确的配置应该不包含引号，例如：
+   # pg_host = 127.0.0.1
+   # pg_user = pdadmin
+   # 而不是：
+   # pg_host = '127.0.0.1'
+   # pg_user = 'pdadmin'
+   ```
+   
+   - 如需修复，移除配置文件中参数值周围的单引号：
+   
+   ```bash
+   sudo sed -i "s/'127.0.0.1'/127.0.0.1/g" /etc/pgdoctor.cfg
+   sudo sed -i "s/'pdadmin'/pdadmin/g" /etc/pgdoctor.cfg
+   sudo sed -i "s/'postgres'/postgres/g" /etc/pgdoctor.cfg
+   sudo systemctl restart pgdoctor
+   ```
+
 ### 扩展问题
 
 1. **Auto Scaling Group未正确扩展**：
@@ -377,6 +402,52 @@ aws cloudformation describe-stacks --stack-name PgpoolAuroraStack --query "Stack
    aws ec2 describe-images --image-ids <AMI_ID>
    ```
 
+### CDK部署问题
+
+1. **CDK Bootstrap问题**：
+   - 如果在项目目录内执行`cdk bootstrap`命令失败，错误信息显示：`ValueError: ami_id is required`
+   - 原因：项目的`app.py`文件中的验证检查在bootstrap操作期间也会运行
+   
+   解决方案：
+   - 在项目目录外执行bootstrap命令（推荐方法）：
+     ```bash
+     cd ~
+     npx cdk bootstrap aws://ACCOUNT-NUMBER/REGION
+     ```
+   - 或在执行bootstrap时提供必要的参数：
+     ```bash
+     cdk bootstrap aws://ACCOUNT-NUMBER/REGION -c ami_id=dummy-value
+     ```
+   
+   如果bootstrap过程失败并显示`ROLLBACK_COMPLETE`状态：
+   ```bash
+   aws cloudformation delete-stack --stack-name CDKToolkit
+   aws cloudformation wait stack-delete-complete --stack-name CDKToolkit
+   npx cdk bootstrap aws://ACCOUNT-NUMBER/REGION
+   ```
+
+2. **Aurora PostgreSQL密码限制问题**：
+   - 如果部署过程中Aurora PostgreSQL集群创建失败，错误信息为：
+     ```
+     The parameter MasterUserPassword is not a valid password. Only printable ASCII characters besides '/', '@', '"', ' ' may be used.
+     ```
+   - 原因：Aurora PostgreSQL对密码有特定的字符限制，不允许使用斜杠(/)、邮箱符号(@)、双引号(")和空格( )
+   
+   解决方案：
+   - 确保密码生成策略只排除Aurora PostgreSQL明确不允许的四个字符
+   - 如果您自定义了CDK代码，请确保密码生成配置类似于：
+     ```python
+     secretsmanager.SecretStringGenerator(
+         secret_string_template=json.dumps({"username": "pdadmin"}),
+         generate_string_key="password",
+         password_length=12,
+         exclude_characters="\"/ @",  # 只排除Aurora PostgreSQL不允许的字符
+         exclude_punctuation=False,
+         include_space=False,
+         require_each_included_type=True
+     )
+     ```
+
 ### 更新和修改
 
 1. **更新堆栈**：
@@ -397,3 +468,62 @@ aws cloudformation describe-stacks --stack-name PgpoolAuroraStack --query "Stack
    - 删除堆栈会删除所有相关资源，包括数据库。默认情况下，Aurora集群会创建最终快照。
    - 必须提供`ami_id`参数，因为app.py中的验证检查在destroy操作期间也会运行。
    - 可以使用任何有效的AMI ID，因为destroy操作不会实际使用该值。
+
+## IAM角色和权限说明
+
+在CDK部署中，我们为EC2实例创建了以下IAM角色和权限：
+
+```python
+# Create IAM role for EC2 instances
+pgpool_role = iam.Role(
+    self, "PgpoolRole",
+    assumed_by=iam.ServicePrincipal("ec2.amazonaws.com"),
+    managed_policies=[
+        iam.ManagedPolicy.from_aws_managed_policy_name("AmazonSSMManagedInstanceCore"),
+        iam.ManagedPolicy.from_aws_managed_policy_name("CloudWatchAgentServerPolicy")
+    ]
+)
+```
+
+这些策略的作用如下：
+
+1. **AmazonSSMManagedInstanceCore**:
+   - 允许EC2实例与AWS Systems Manager (SSM)服务进行通信
+   - 使管理员能够通过SSM Session Manager安全地连接到EC2实例，无需开放SSH端口或管理SSH密钥
+   - 允许实例接收SSM命令、参数和文档
+   - 支持远程管理、补丁管理和自动化操作
+
+2. **CloudWatchAgentServerPolicy**:
+   - 允许EC2实例将日志和指标数据发送到Amazon CloudWatch
+   - 支持CloudWatch Agent的完整功能，包括收集系统指标、应用程序日志和自定义指标
+   - 允许实例读取和写入CloudWatch Logs
+   - 支持创建和管理CloudWatch告警
+
+这两个策略的组合使Pgpool-II实例能够：
+- 被远程管理，无需直接SSH访问（提高安全性）
+- 发送日志和指标到CloudWatch进行监控
+- 支持自动化操作和问题排查
+- 实现集中化的日志管理和监控
+
+## 最佳实践总结
+
+1. **CDK Bootstrap**:
+   - CDK bootstrap是一次性操作，为AWS账户和区域设置必要的资源
+   - 确保拥有足够的权限执行bootstrap操作（通常需要管理员权限）
+   - 每个AWS账户和区域只需执行一次bootstrap操作
+
+2. **PostgreSQL配置**:
+   - 配置PostgreSQL连接参数时，避免在值周围使用不必要的引号
+   - 使用符合数据库系统要求的密码生成策略，了解特定数据库系统的密码限制
+   - 在故障排除时，先测试直接连接到数据库，确认凭证有效性
+
+3. **安全性**:
+   - 使用SSM Session Manager而不是SSH密钥进行实例管理
+   - 将所有组件部署在适当的子网中（公有/私有）
+   - 实施最小权限原则配置安全组和IAM策略
+   - 使用Secrets Manager管理和轮换数据库凭证
+
+4. **监控和告警**:
+   - 配置全面的CloudWatch告警以监控关键指标
+   - 设置自动通知机制以便及时响应问题
+   - 定期审查日志和性能指标
