@@ -2,7 +2,7 @@ import boto3
 import time
 import sys
 
-def create_pgpool_ami(region_name, cluster_endpoint, reader_endpoint, db_user='pdadmin', db_password='1qaz2wsx', instance_type='t3.micro'):
+def create_pgpool_ami(region_name, cluster_endpoint="your-aurora-cluster-endpoint", reader_endpoint="your-aurora-reader-endpoint", db_user='pdadmin', db_password='1qaz2wsx', instance_type='t3.micro'):
     # 初始化EC2客户端
     ec2 = boto3.client('ec2', region_name=region_name)
     
@@ -363,13 +363,13 @@ touch /tmp/ami_ready
     return ami_id
 
 if __name__ == "__main__":
-    if len(sys.argv) < 4:
-        print("用法: python create_pgpool_ami.py <region_name> <cluster_endpoint> <reader_endpoint> [db_user] [db_password] [instance_type]")
+    if len(sys.argv) < 2:
+        print("用法: python create_pgpool_ami.py <region_name> [cluster_endpoint] [reader_endpoint] [db_user] [db_password] [instance_type]")
         sys.exit(1)
     
     region = sys.argv[1]
-    cluster_endpoint = sys.argv[2]
-    reader_endpoint = sys.argv[3]
+    cluster_endpoint = sys.argv[2] if len(sys.argv) > 2 else "your-aurora-cluster-endpoint"
+    reader_endpoint = sys.argv[3] if len(sys.argv) > 3 else "your-aurora-reader-endpoint"
     db_user = sys.argv[4] if len(sys.argv) > 4 else 'pdadmin'
     db_password = sys.argv[5] if len(sys.argv) > 5 else '1qaz2wsx'
     instance_type = sys.argv[6] if len(sys.argv) > 6 else 't3.micro'
